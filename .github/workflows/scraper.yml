@@ -2,8 +2,8 @@ name: Daily Inflation Scraper
 
 on:
   schedule:
-    - cron: '0 10 * * *' # يعمل يومياً الساعة 10 صباحاً
-  workflow_dispatch: # زر للتشغيل اليدوي
+    - cron: '0 10 * * *' # Runs daily at 10:00 AM UTC
+  workflow_dispatch: # Manual trigger button
 
 jobs:
   run-scraper:
