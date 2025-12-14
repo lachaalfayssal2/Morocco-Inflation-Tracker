@@ -1,0 +1,29 @@
+name: Daily Inflation Scraper
+
+on:
+  schedule:
+    - cron: '0 10 * * *' # يعمل يومياً الساعة 10 صباحاً
+  workflow_dispatch: # زر للتشغيل اليدوي
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Libraries
+        run: |
+          pip install -r requirements.txt
+
+      - name: Create Credentials File
+        run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
+
+      - name: Run Scraper
+        run: python main.py
