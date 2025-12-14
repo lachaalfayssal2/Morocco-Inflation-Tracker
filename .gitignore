@@ -1,0 +1,8 @@
+# تجاهل الملفات المؤقتة والبيئات الافتراضية
+__pycache__/
+venv/
+.env
+
+# --- المنطقة الخطرة (ممنوع النشر) ---
+credentials.json
+client_secret.json
