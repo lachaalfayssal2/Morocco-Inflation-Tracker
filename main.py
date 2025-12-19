@@ -1,6 +1,6 @@
 import time
 import random
-import os  # <--- إضافة مهمة للتحقق من الملفات
+import os
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -11,7 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- 1. PRODUCT LIST (Moroccan Basket) ---
+# --- 1. PRODUCT LIST ---
 products_urls = [
     "https://www.marjane.ma/courses-en-ligne/8-epicerie/35-huiles-et-vinaigres/142-huiles-de-cuisson/1424-huile-de-friture-5l-lesieur",
     "https://www.marjane.ma/courses-en-ligne/8-epicerie/59-sucre-sucrettes/227-sucre-granule/2151-sucre-granule-2kg-enmer",
@@ -25,87 +25,68 @@ products_urls = [
     "https://www.marjane.ma/courses-en-ligne/13-produits-laitiers-%C5%93ufs/64-laits-et-%C5%93ufs/251-%C5%93ufs/27503-plateau-%C5%93ufs-frais-x30-unites-natur-%C5%93uf"
 ]
 
-# --- 2. GOOGLE SHEETS CONNECTION (DEBUG MODE) ---
+# --- 2. GOOGLE SHEETS CONNECTION ---
 def upload_to_sheet(product_name, price, url):
     try:
-        print("   > Connecting to Google Sheets...")
-        
-        # Check if credentials file exists
-        if os.path.exists("credentials.json"):
-            print("   ✅ DEBUG: credentials.json file FOUND.")
-        else:
-            print("   ❌ DEBUG: credentials.json file NOT FOUND! (Check GitHub Secrets)")
-            
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        if not os.path.exists("credentials.json"):
+            print("   ❌ Credentials File Missing!")
+            return
+
         creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
         client = gspread.authorize(creds)
-        
-        # Open Sheet
         sheet = client.open("Morocco_Inflation_DB").sheet1
         
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [current_date, product_name, price, url]
-        
         sheet.append_row(row)
-        print(f"   ✅ Data Saved Successfully: {row}")
+        print(f"   ✅ Saved: {product_name} -> {price} MAD")
         
     except Exception as e:
-        print(f"   ❌ FATAL ERROR in Sheets: {e}")
-        raise e  # <--- IMPORTANT: This forces GitHub Actions to show the real error
+        print(f"   ❌ Sheets Error: {e}")
 
-# --- 3. MAIN SCRAPER ENGINE ---
+# --- 3. MAIN SCRAPER ---
 def get_marjane_prices():
     options = webdriver.ChromeOptions()
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    options.add_argument("--start-maximized")
-    options.add_argument("--headless") 
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    print("🚀 Starting Marjane Scraper...")
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
-    count = 1
-    total = len(products_urls)
+    print(f"🚀 Processing {len(products_urls)} products...")
 
-    for url in products_urls:
-        print(f"\n------------------------------------------------")
-        print(f"[{count}/{total}] Processing URL...")
-        
+    for i, url in enumerate(products_urls, 1):
+        print(f"\n[{i}/{len(products_urls)}] checking...")
         try:
             driver.get(url)
-            wait = WebDriverWait(driver, 20)
+            wait = WebDriverWait(driver, 15) # انتظر 15 ثانية كحد أقصى
             
-            # 1. Get Price
+            # 1. Price
             price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.price")))
             raw_price = price_element.text  
-            clean_price = raw_price.replace("DH", "").replace("dh", "").replace(" ", "").replace(",", ".").strip()
-            final_price = float(clean_price)
+            final_price = float(raw_price.replace("DH", "").replace("dh", "").replace(" ", "").replace(",", ".").strip())
 
-            # 2. Get Name
+            # 2. Name
             try:
                 name_element = driver.find_element(By.CSS_SELECTOR, "h1, h2.product-title")
                 product_name = name_element.text
             except:
                 product_name = "Unknown Product"
 
-            print(f"   📦 Product: {product_name}")
-            print(f"   💰 Price: {final_price} MAD")
-            
-            # 3. Upload
+            # 3. Save
             upload_to_sheet(product_name, final_price, url)
 
-            time.sleep(random.uniform(4, 8))
-
         except Exception as e:
-            print(f"   ⚠️ Error processing link: {e}")
-            # If it's a critical Google Sheet error, we want to stop
-            if "Fatale" in str(e) or "client_email" in str(e):
-                 raise e
+            # هنا التغيير المهم: فقط نطبع الخطأ ونكمل للمنتج التالي
+            print(f"   ⚠️ SKIPPING Product (Error): {str(e)[:100]}...") 
+            continue 
         
-        finally:
-            count += 1
+        time.sleep(random.uniform(2, 5))
 
-    print("\n🏁 Scraping Finished. All data sent to Cloud.")
     driver.quit()
+    print("\n🏁 Done.")
 
 if __name__ == "__main__":
     get_marjane_prices()
