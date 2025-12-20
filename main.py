@@ -61,7 +61,7 @@ def get_marjane_prices():
         print(f"\n[{i}/{len(products_urls)}] checking...")
         try:
             driver.get(url)
-            wait = WebDriverWait(driver, 15) # انتظر 15 ثانية كحد أقصى
+            wait = WebDriverWait(driver, 60)
             
             # 1. Price
             price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.price")))
