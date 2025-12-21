@@ -29,8 +29,9 @@ products_urls = [
 def upload_to_sheet(product_name, price, url):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        # Check if credentials exist
         if not os.path.exists("credentials.json"):
-            print("   ❌ Credentials File Missing!")
+            print("   ❌ Credentials File Missing! (Check GitHub Secrets)")
             return
 
         creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
@@ -45,30 +46,57 @@ def upload_to_sheet(product_name, price, url):
     except Exception as e:
         print(f"   ❌ Sheets Error: {e}")
 
-# --- 3. MAIN SCRAPER ---
+# --- 3. MAIN SCRAPER (STEALTH MODE) ---
 def get_marjane_prices():
+    print("🚀 Starting Stealth Scraper...")
+    
     options = webdriver.ChromeOptions()
+    
+    # A. Use a real User-Agent (looks like a normal Windows PC)
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    # B. Disable Automation Flags (The "Anti-Detect" Magic)
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    # C. Standard Headless Options
     options.add_argument("--headless")
+    options.add_argument("--window-size=1920,1080")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
-    print(f"🚀 Processing {len(products_urls)} products...")
+    # D. JavaScript Injection to hide 'navigator.webdriver'
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    
+    print(f"📦 Processing {len(products_urls)} products...")
 
     for i, url in enumerate(products_urls, 1):
-        print(f"\n[{i}/{len(products_urls)}] checking...")
+        print(f"\n[{i}/{len(products_urls)}] Accessing URL...")
         try:
             driver.get(url)
+            
+            # E. Scroll down to trigger any lazy-loaded elements
+            driver.execute_script("window.scrollTo(0, 500);")
+            time.sleep(2) # Short pause after load
+            
+            # F. Wait up to 60 seconds (Robustness)
             wait = WebDriverWait(driver, 60)
             
-            # 1. Price
+            # 1. Get Price
             price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.price")))
-            raw_price = price_element.text  
-            final_price = float(raw_price.replace("DH", "").replace("dh", "").replace(" ", "").replace(",", ".").strip())
+            raw_price = price_element.text 
+            
+            # Clean Price logic
+            clean_price = raw_price.replace("DH", "").replace("dh", "").replace(" ", "").replace(",", ".").strip()
+            if not clean_price:
+                raise ValueError("Price text is empty")
+                
+            final_price = float(clean_price)
 
-            # 2. Name
+            # 2. Get Name
             try:
                 name_element = driver.find_element(By.CSS_SELECTOR, "h1, h2.product-title")
                 product_name = name_element.text
@@ -79,11 +107,12 @@ def get_marjane_prices():
             upload_to_sheet(product_name, final_price, url)
 
         except Exception as e:
-            # هنا التغيير المهم: فقط نطبع الخطأ ونكمل للمنتج التالي
+            # Skip error and continue to next product
             print(f"   ⚠️ SKIPPING Product (Error): {str(e)[:100]}...") 
             continue 
         
-        time.sleep(random.uniform(2, 5))
+        # G. Random Sleep to mimic human behavior
+        time.sleep(random.uniform(4, 8))
 
     driver.quit()
     print("\n🏁 Done.")
